@@ -423,8 +423,8 @@
             gl.vertexAttribPointer(boSbNode.idAttrLoc, 1, gl.FLOAT, false, 0, 4*6* boSbNode.numObj);
             gl.vertexAttribPointer(boSbNode.checkedAttrLoc, 1, gl.FLOAT, false, 0, 4*7* boSbNode.numObj);
 
-            
-             //gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+            gl.enable(gl.BLEND);
+            gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
             gl.useProgram(shaderIsochrone.shader);
             gl.uniform4f(shaderIsochrone.translation, cenX, cenY, maxX-minX, whRatio );
             gl.bindBuffer(gl.ARRAY_BUFFER, boIsochrone.vbo);
@@ -1417,7 +1417,7 @@
         precision highp float;
 
         varying float dist;
-        float alpha = 1.0;
+        float alpha = 0.35;
 
         vec4 colorFunc(vec4 source) {
             return source *vec4(vec3(6),1)*vec4(0.1);
