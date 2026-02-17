@@ -858,7 +858,7 @@
 
                     var direction1 = normalize(coord[1][0],coord[1][1], coord[2][0], coord[2][1]); 
                     dr = normalize0([-direction0[0]+direction1[0], -direction0[1]+direction1[1]]);
-                    if (isNaN(dr[0])||!isFinite[dr[0]]) dr = rotate(direction1, -90);
+                    if (isNaN(dr[0]) || !isFinite(dr[0])) dr = rotate(direction1, -90);
                     var dr2 =  rotate(direction0, -90);
                     var dotValue = dotVectors(dr,dr2);
                     //console.log(dotValue);
@@ -897,7 +897,7 @@
 
                         direction1 = normalize(coord[j][0],coord[j][1], coord[j+1][0], coord[j+1][1]); 
                         dr = normalize0([-direction0[0]+direction1[0], -direction0[1]+direction1[1]]);
-                        if (isNaN(dr[0])||!isFinite[dr[0]]) dr = rotate(direction1, -90);
+                        if (isNaN(dr[0]) || !isFinite(dr[0])) dr = rotate(direction1, -90);
                         dr2 =  rotate(direction0, -90);
                         dotValue = dotVectors(dr,dr2);
                         p2 = [coord[j][0]+dr[0]*thickness/dotValue, coord[j][1]+dr[1]*thickness/dotValue];
