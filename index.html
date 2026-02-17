@@ -12,6 +12,9 @@
 
     <meta charset="utf-8">
     <title>Isochrone map of Seoul Subway</title>    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/proj4@2.12.1/dist/proj4.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
     <script src="https://unpkg.com/delaunator@3.0.2/delaunator.min.js"></script>    
     <script src="geoLine.js"></script>
     <script src="nodeData.js"></script>
@@ -39,12 +42,28 @@
         }
         .container {
             position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #map {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            pointer-events: none;
         }
         /* canvas를 viewport 크기로 만들기 */
         canvas {
+            position: absolute;
+            left: 0;
+            top: 0;
             width: 100vw;
             height: 100vh;
             display: block;
+            z-index: 10;
         }
 
         #text {
@@ -52,8 +71,12 @@
             position: absolute;
             left: 0px;
             top: 0px;
-            z-index: 10;
+            z-index: 20;
             -webkit-text-fill-color: aliceblue;
+        }
+
+        .leaflet-container {
+            background: #121212;
         }
     </style>
     <script type="text/javascript">
@@ -209,11 +232,83 @@
         var solution;
         var helpOn = true;
 
+        var map;
+        var mapLayers;
+        var mapLayerName = ["OSM", "Light", "Satellite"];
+        var currentMapLayer = 0;
+        var mapZoomMin = 6;
+        var mapZoomMax = 18;
+
+        var EPSG5179 = '+proj=tmerc +lat_0=38 +lon_0=127.5 +k=0.9996 +x_0=1000000 +y_0=2000000 +ellps=GRS80 +units=m +no_defs';
+
+        function tmToLngLat(x, y) {
+            var coord = proj4(EPSG5179, 'EPSG:4326', [x, y]);
+            return [coord[1], coord[0]];
+        }
+
+        function meterPerPixelToZoom(mpp, lat) {
+            var cosLat = Math.cos(lat * Math.PI / 180.0);
+            var rawZoom = Math.log2((156543.03392 * cosLat) / Math.max(mpp, 0.001));
+            if (rawZoom < mapZoomMin) return mapZoomMin;
+            if (rawZoom > mapZoomMax) return mapZoomMax;
+            return rawZoom;
+        }
+
+        function initMap() {
+            var centerLatLng = tmToLngLat(cenX, cenY);
+
+            map = L.map('map', {
+                zoomControl: false,
+                dragging: false,
+                scrollWheelZoom: false,
+                doubleClickZoom: false,
+                boxZoom: false,
+                keyboard: false,
+                tap: false
+            }).setView(centerLatLng, 11);
+
+            mapLayers = [
+                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; OpenStreetMap contributors'
+                }),
+                L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                    subdomains: 'abcd',
+                    maxZoom: 20,
+                    attribution: '&copy; OpenStreetMap contributors &copy; CARTO'
+                }),
+                L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                    maxZoom: 19,
+                    attribution: 'Tiles &copy; Esri'
+                })
+            ];
+
+            mapLayers[currentMapLayer].addTo(map);
+        }
+
+        function switchMapLayer() {
+            map.removeLayer(mapLayers[currentMapLayer]);
+            currentMapLayer = (currentMapLayer + 1) % mapLayers.length;
+            mapLayers[currentMapLayer].addTo(map);
+            requestAnimationFrame(render);
+        }
+
+        function syncMapToCurrentView() {
+            if (!map) return;
+
+            var center = tmToLngLat(cenX, cenY);
+            var meterPerPixel = (2.0 * (maxX - minX)) / Math.max(scrW, 1);
+            var zoom = meterPerPixelToZoom(meterPerPixel, center[0]);
+            map.setView(center, zoom, { animate: false });
+        }
+
 
         function main() {
 
             canvas = document.getElementById("glcanvas");
             textCanvas = document.getElementById("text");
+
+            initMap();
             
 
             gl = initWebGL(canvas);      // Initialize the GL context
@@ -319,6 +414,7 @@
             resize(gl.canvas);
             gl.viewport(0, 0, gl.canvas.width, gl.canvas.height);
             recalculateMaxY();            
+            syncMapToCurrentView();
             
             //gl.lineWidth(50);
             //AttrLoc를 일단 모든 경우에 대해서 지정해 주어야 문제가 안 생김. 해결하려면 함수 구조체를 쓰지 말아야 함            
@@ -472,6 +568,7 @@
                 ctx.font = "15px '맑은 고딕'";
                 ctx.fillStyle = "rgba(200,200,200,1)";
                 ctx.fillText("'h' key : 도움말",15, scrH-20); 
+                ctx.fillText("'m' key : 지도 전환 ("+mapLayerName[currentMapLayer]+")",15, scrH-40);
 
                 if (originNode>=0) {
                         ctx.font = "bold 30px '맑은 고딕'";
@@ -1233,6 +1330,9 @@
                 gl.bindBuffer(gl.ARRAY_BUFFER, boSbNode.vbo);
                 gl.bufferSubData(gl.ARRAY_BUFFER, 4*7* boSbNode.numObj, new Float32Array(checkedNode));
                 break;
+                case 77: //map layer switch
+                    switchMapLayer();
+                break;
                 case 72: //help
                     helpOn = !helpOn;
                 break;
@@ -1540,8 +1640,11 @@
     </script>
 </head>
 <body onload="main()">
-    <canvas id="glcanvas"></canvas>    
-    <canvas id="text"></canvas>
+    <div class="container">
+        <div id="map"></div>
+        <canvas id="glcanvas"></canvas>
+        <canvas id="text"></canvas>
+    </div>
 </body>
 </html>
 
